@@ -1,0 +1,77 @@
+---------------- Syntax ----------------
+fmod CCSA-SYNTAX is
+  sorts Msg Key EncKey DecKey Rand ListMsg State .
+  subsorts Key EncKey DecKey Rand < Msg .
+  subsort Msg < ListMsg .
+
+  op nil : -> ListMsg [ctor] .
+  op _,_ : ListMsg ListMsg -> ListMsg [assoc comm id: nil] .
+
+  op eK   : Key -> EncKey [ctor] .
+  op dK   : Key -> DecKey [ctor] .
+  op pair : Msg Msg -> Msg [ctor] .
+  op enc  : Msg Rand EncKey -> Msg [ctor] .
+  op dec  : Msg DecKey -> Msg [ctor] .
+
+  --- membership over AC multiset
+  op _in_ : Msg ListMsg -> Bool .
+  vars X Y : Msg .  var L : ListMsg .
+  eq X in (X , L) = true .
+  eq X in (Y , L) = X in L [owise] .
+  eq X in nil = false .
+
+  --- State ⟨ φ ; Support ; Target ; Fresh ⟩
+  op <_;_;_;_> : ListMsg ListMsg Msg ListMsg -> State [ctor] .
+
+  op bot : -> Msg [ctor] .
+endfm
+
+---------------- Equations (transparent constructors) ----------------
+fmod CCSA-EQ is
+  protecting CCSA-SYNTAX .
+  vars X Y : Msg .  var R : Rand .  var K : Key .
+  eq dec(enc(X, R, eK(K)), dK(K)) = X .
+endfm
+
+---------------- Computational axioms as goal-reduction ----------------
+mod CCSA-RULES is
+  protecting CCSA-EQ .
+  vars PHI SUP FRESH : ListMsg .
+  vars X Y : Msg .  var R : Rand .  var K : Key .
+
+  --- CCA2-Secrecy (drop honest ciphertext from support)
+  crl [CCA2-Secrecy] :
+       < PHI ; (SUP , enc(X, R, eK(K))) ; Y ; FRESH >
+    => < PHI ; SUP ; Y ; FRESH >
+    if (eK(K) in PHI) and (K in FRESH) and (R in FRESH)
+       and ((R in PHI) == false) and ((dK(K) in PHI) == false) .
+
+  --- No-Telepathy (fresh, not in frame)
+  crl [NoTelepathy] :
+       < PHI ; SUP ; X ; FRESH >
+    => < PHI ; SUP ; bot ; FRESH >
+    if (SUP == nil)                          --- NEW: no remaining support
+       and (X in FRESH)
+       and ((X in PHI) == false) .
+endm
+
+---------------- Example 5 scenario ----------------
+mod CCSA-EX5 is
+  protecting CCSA-RULES .
+
+  ops A B N1 : -> Msg [ctor] .
+  ops KA KB  : -> Key [ctor] .
+  op  R1     : -> Rand [ctor] .
+
+  op phi1   : -> ListMsg .
+  eq phi1 = (A , B , eK(KA) , eK(KB)) .
+
+  op fresh1 : -> ListMsg .
+  eq fresh1 = (N1 , R1 , KA , KB) .
+
+  --- φ2 ⊢ N1  where φ2 = φ1 , {<N1,A>}_{R1}^{eK_B}
+  op ex5 : -> State .
+  eq ex5 = < phi1 ; enc(pair(N1, A), R1, eK(KB)) ; N1 ; fresh1 > .
+endm
+
+search [1] in CCSA-EX5 : ex5 =>* < PHI:ListMsg ; SUP:ListMsg ; bot ; FRESH:ListMsg > .

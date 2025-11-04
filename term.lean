@@ -53,22 +53,43 @@ def Matches (t : Term sig X) (t' : Term sig Y) : Prop :=
   ∃ σ : X → Term sig Y, subst σ t = t'
 
 
--- Basic lemmas
+/--- Basic lemmas ---/
 
-/- Reflexivity (with same variable set): use the identity substitution. -/
--- theorem Matches.refl (t : Term sig X) : Matches t t :=
---   ⟨(fun x => Term.var x), by
-     -- `subst (fun x => var x) t = t`
-     -- follows from your `fold`-based definition
-     -- (induction on `t` if needed)
-     -- sketch:
-    --  induction t with
-    --  | var x      => rfl
-    --  | op f args ih =>
-    --        simp [subst, fold]
-    --        funext i
-    --        exact ih i
+theorem subst_id (t : Term sig X) : subst (fun x => .var x) t = t
+  := by
+  induction t with
+  | var x      => rfl
+  | op f args ih =>
+        simp [subst, fold]
+        funext i
+        exact ih i
+
+theorem Matches.refl (t : Term sig X) : Matches t t :=
+  ⟨(fun x => Term.var x), subst_id t⟩
+
+theorem Matches.trans
+  {t1 : Term sig X} {t2 : Term sig Y} {t3 : Term sig Z}
+  (h1 : Matches t1 t2) (h2 : Matches t2 t3) : Matches t1 t3 := sorry
 end Term
+
+
+namespace Pattern
+open Term
+--- Definition of Basic Patterns as pairs (Term, Prop)
+structure BPat (sig : Signature) (X: Type) where
+  term : Term sig X
+  guard : Prop
+
+--- Definition of Patterns as lists of Basic Patterns
+abbrev Pattern (sig : Signature) (X: Type):= List (BPat sig X)
+
+
+def BPSubsumes (bp : BPat sig X) (bp' : BPat sig Y) : Prop :=
+  Matches bp.term bp'.term ∧ (bp'.guard → bp.guard)
+
+def PSubsumes (p : Pattern sig X) (p' : Pattern sig Y) : Prop :=
+  ∀ bp' ∈ p', ∃ bp ∈ p, BPSubsumes bp bp'
+end Pattern
 
 
 namespace PrettyTerm
@@ -165,16 +186,3 @@ def add_one_x : Term sig_nat Nat := add(succ(zero()), .var 0)
 -- #eval eval NatAlg (fun x => x + 10) t  -- (succ (x+10)) + 0 = 11
 
 end TermExample
-
-
-
-namespace Pattern
-open Term
---- Definition of Basic Patterns as pairs (Term, Prop)
-structure BPat (sig : Signature) (X: Type) where
-  term : Term sig X
-  guard : Prop
-
---- Definition of Patterns as lists of Basic Patterns
-abbrev Pattern (sig : Signature) (X: Type):= List (BPat sig X)
-end Pattern

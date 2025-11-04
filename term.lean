@@ -106,7 +106,7 @@ class ToStringSym (sig : Signature) where
 def term2string
   [ToString X] [ToStringSym sig] (t: Term sig X) : String :=
   Term.fold (sig:=sig) (X:=X)
-    (fun x => s!"X_{toString x}")
+    (fun x => s!"${toString x}")
     (fun f cs =>
       let parts := finFunToList (fun i => cs i)
       let args  := String.intercalate ", " parts
@@ -162,7 +162,7 @@ def add_one_zero : Term sig_nat Nat := add(succ(zero()), zero())
 def add_one_x : Term sig_nat Nat := add(succ(zero()), .var 0)
 
 #eval add_one_zero -- add(succ(zero()), zero())
-#eval add_one_x -- add(succ(zero()), X_0)
+#eval add_one_x -- add(succ(zero()), $0)
 
 #eval (subst (sig:=sig_nat) (X:=Nat) (Y:=Nat)
       (fun x:Nat => succ(.var x)) add_one_zero)
@@ -170,19 +170,40 @@ def add_one_x : Term sig_nat Nat := add(succ(zero()), .var 0)
 #eval (subst (fun x:Nat => succ(.var x) : Nat → Term sig_nat Nat) add_one_zero)
 --- #eval (subst (fun x:Nat => succ(Term.var x)) add_one_zero) // does not work
 
--- add(succ(zero()), X_0) ---> add(succ(zero()), succ(X_0))
+-- add(succ(zero()), $0) ---> add(succ(zero()), succ($0))
 #eval ((subst (sig:=sig_nat) (fun x => succ(.var x))) add_one_x)
 
--- add(succ(zero()), X_0) ---> add(succ(zero()), succ(X_1))
+-- add(succ(zero()), $0) ---> add(succ(zero()), succ($1))
 #eval ((subst (sig:=sig_nat) (fun x:Nat => succ(.var (x + 1)))) add_one_x)
 
--- Interpret symbols in `Nat`
--- def NatAlg : Algebra SigNat Nat where
---   interp
---   | zero, _ => 0
---   | succ, cs => Nat.succ (cs ⟨0, by decide⟩)
---   | add,  cs => (cs ⟨0, by decide⟩) + (cs ⟨1, by decide⟩)
 
--- #eval eval NatAlg (fun x => x + 10) t  -- (succ (x+10)) + 0 = 11
+def add_one_x_str : Term sig_nat String := add(succ(zero()), .var "N")
+#eval add_one_x_str -- add(succ(zero()), $N)
+
+
+open Pattern
+
+def t1 : Term sig_nat String := succ(.var "X")
+def t2 : Term sig_nat String := succ(succ(.var "X"))
+
+#eval (subst (sig:=sig_nat) (fun x => succ(.var x)) t1) -- this is equal to t2 i.e. succ(succ($X))
+
+-- TODO: seems pretty printing prevents reducing the expression
+theorem subst_t1 : subst (fun x:String => succ(.var x)) t1 = t2
+  := by
+  simp [t1, t2, subst, fold]
+  sorry
+
+theorem matches_t1_t2 : Matches t1 t2 :=
+  ⟨fun x:String => succ(.var x), sorry⟩
+
+def state1 : Pattern sig_nat String :=
+  [ { term := succ(.var "X"), guard := true } ]
+
+def state2 : Pattern sig_nat String :=
+  [ { term := succ(succ(.var "X")), guard := true } ]
+
+theorem state1_subsumes_state2 : PSubsumes state1 state2 := sorry
+
 
 end TermExample

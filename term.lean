@@ -68,38 +68,30 @@ def Matches (t : Term sig X) (t' : Term sig Y) : Prop :=
     --        simp [subst, fold]
     --        funext i
     --        exact ih i
----end Term
+end Term
 
 
----namespace PrettyTerm
+namespace PrettyTerm
 open Term
-
-/--- Below are codes for pretty printing ---/
-def op0  (f : sig.Symbol 0)                 : Term sig X := .op f (fun i => nomatch i)
-def op1  (f : sig.Symbol 1) (a : Term sig X)  : Term sig X := .op f (fun | ⟨0, _⟩ => a)
-def op2  (f : sig.Symbol 2) (a b : Term sig X): Term sig X :=
-  .op f (fun | ⟨0, _⟩ => a | ⟨1, _⟩ => b)
--- etc.
-notation:max f:100 "(" ")"          => Term.op0 f
-notation:max f:100 "(" a ")"        => Term.op1 f a
-notation:max f:100 "(" a "," b ")"  => Term.op2 f a b
+open Term.Term
 
 class ToStringSym (sig : Signature) where
   symToString : {n : Nat} → sig.Symbol n → String
 
-@[inline] private def childrenToList
-  {n : Nat} (args : Fin n → Term sig X) : List (Term sig X) :=
-  List.ofFn (fun i : Fin n => args i)
+@[inline] private def finFunToList {n : Nat} (f : Fin n → String) : List String :=
+  List.ofFn (fun i : Fin n => f i)
 
 /-- String printer for terms, using the bundled symbol printer. -/
 def term2string
-  [ToString X] [ToStringSym sig] : Term sig X → String
-  | _ => "hello"
-  -- fold (fun x => toString x)
-  --      (fun {n} f cs =>
-  --        let parts := finFunToList (fun i => cs i)
-  --        let args  := String.intercalate ", " parts
-  --        s!"{ToStringSym.symToString f}({args})")
+  [ToString X] [ToStringSym sig] (t: Term sig X) : String :=
+  Term.fold (sig:=sig) (X:=X)
+    (fun x => toString x)
+    (fun f cs =>
+      let parts := finFunToList (fun i => cs i)
+      let args  := String.intercalate ", " parts
+      s!"{ToStringSym.symToString f}({args})")
+    t
+
 
 /- ToString instance for Term -/
 instance [ToString X] [ToStringSym sig] : ToString (Term sig X) where
@@ -108,13 +100,13 @@ instance [ToString X] [ToStringSym sig] : ToString (Term sig X) where
 /- Repr instance for Term -/
 instance [ToString X] [ToStringSym sig] : Repr (Term sig X) where
   reprPrec t _ := .text (term2string t)
----end PrettyTerm
+end PrettyTerm
 
 
 
 namespace TermExample
 open Term
----open PrettyTerm
+open PrettyTerm
 
 /- Some examples -/
 inductive Sym : Nat → Type
@@ -132,6 +124,19 @@ instance : ToStringSym sig_nat where
   | succ => "succ"
   | add  => "add"
 
+/--- Below are codes for pretty printing ---/
+def op0  (f : sig.Symbol 0)                 : Term sig X := .op f (fun i => nomatch i)
+def op1  (f : sig.Symbol 1) (a : Term sig X)  : Term sig X := .op f (fun | ⟨0, _⟩ => a)
+def op2  (f : sig.Symbol 2) (a b : Term sig X): Term sig X :=
+  .op f (fun | ⟨0, _⟩ => a | ⟨1, _⟩ => b)
+-- etc.
+
+notation:max f:100 "(" ")"          => op0 f
+notation:max f:100 "(" a ")"        => op1 f a
+notation:max f:100 "(" a "," b ")"  => op2 f a b
+
+def zero' : Term sig_nat X := op0 zero
+def zero''  : Term sig_nat X := zero()
 def add_one_zero : Term sig_nat Nat := add(succ(zero()), zero())
 #eval add_one_zero
 ---#eval (subst (fun x => succ(x)) add_one_zero)  -- add(succ(succ(0)), succ(0))

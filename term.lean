@@ -85,7 +85,7 @@ class ToStringSym (sig : Signature) where
 def term2string
   [ToString X] [ToStringSym sig] (t: Term sig X) : String :=
   Term.fold (sig:=sig) (X:=X)
-    (fun x => toString x)
+    (fun x => s!"X_{toString x}")
     (fun f cs =>
       let parts := finFunToList (fun i => cs i)
       let args  := String.intercalate ", " parts
@@ -138,9 +138,22 @@ notation:max f:100 "(" a "," b ")"  => op2 f a b
 def zero' : Term sig_nat X := op0 zero
 def zero''  : Term sig_nat X := zero()
 def add_one_zero : Term sig_nat Nat := add(succ(zero()), zero())
-#eval add_one_zero
----#eval (subst (fun x => succ(x)) add_one_zero)  -- add(succ(succ(0)), succ(0))
+def add_one_x : Term sig_nat Nat := add(succ(zero()), .var 0)
 
+#eval add_one_zero -- add(succ(zero()), zero())
+#eval add_one_x -- add(succ(zero()), X_0)
+
+#eval (subst (sig:=sig_nat) (X:=Nat) (Y:=Nat)
+      (fun x:Nat => succ(.var x)) add_one_zero)
+#eval (subst (sig:=sig_nat) (fun x:Nat => succ(.var x)) add_one_zero)
+#eval (subst (fun x:Nat => succ(.var x) : Nat → Term sig_nat Nat) add_one_zero)
+--- #eval (subst (fun x:Nat => succ(Term.var x)) add_one_zero) // does not work
+
+-- add(succ(zero()), X_0) ---> add(succ(zero()), succ(X_0))
+#eval ((subst (sig:=sig_nat) (fun x => succ(.var x))) add_one_x)
+
+-- add(succ(zero()), X_0) ---> add(succ(zero()), succ(X_1))
+#eval ((subst (sig:=sig_nat) (fun x:Nat => succ(.var (x + 1)))) add_one_x)
 
 -- Interpret symbols in `Nat`
 -- def NatAlg : Algebra SigNat Nat where

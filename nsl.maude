@@ -1,20 +1,3 @@
-***(
-mod EXAMPLE is
-  op q : Name  Nat --- control state: q(principal, qid, session_id)
-  op v : Name Nat Nat -> Var . --- variable: v(principal, var_id, session_id)
-
-A --> B : 
-
-  crl [l0] :
-    [ SEQ | q(a,0,SID) MSET ] => [ SEQ @ f(v(a,0,SID)) | q(a,1,SID) v(a,0,SID) MSET ]
-    if SEQ |> v(a,0,SID) .
-
-  crl [l1] :
-    [ SEQ | q(a,1,SID) v(a,0,SID) MSET ] => [ SEQ @ v(a,0,SID) ; v(a,1,SID) | q(a,2,SID) v(a,0,SID) v(a,1,SID) MSET ]
-    if SEQ |> v(a,1,SID) /\ v(a,0,SID) = v(a,1,SID) .
-endm
-***)
-
 mod NSL is
   protecting NAT .
 
@@ -52,8 +35,6 @@ mod NSL is
   op ok : Nat -> Msg .
   ops a, b : -> Name [ctor] .
   op b' : -> Name .
-  op init : -> State .
-  eq init = [ nil | q(a,0,0) q(b,0,0) q(a,0,1) q(b,0,1) ] .
 
 ***(
 description of the intended(honest) run:
@@ -73,38 +54,26 @@ setting:
 
 
   rl [a1] :
-    [ SEQ | q(a,0,SID) MSET ] => [ SEQ && enc(n(a,SID) ; a, pk(b')) | q(a,1,SID) n(a,SID) MSET ] [nonexec] .
+    [ SEQ | q(a,0,SID) MSET ] => [ SEQ && enc(n(a,SID) ; a, pk(b')) | q(a,1,SID) n(a,SID) MSET ] [nonexec narrowing] .
 
   crl [a2] :
     [ SEQ | q(a,1,SID) n(a,SID) MSET ] => [ SEQ && enc(NONCE, pk(b')) | q(a,2,SID) n(a,SID) v(a,0,SID) MSET ]
     if SEQ |> v(a,0,SID)
-    /\ dec(v(a,0,SID), sk(a)) = (n(a,SID) ; NONCE ; b') [nonexec] .
+    /\ dec(v(a,0,SID), sk(a)) = (n(a,SID) ; NONCE ; b') [nonexec narrowing] .
 
   crl [b1] :
     [ SEQ | q(b,0,SID) MSET ] => [ SEQ && enc(NONCE ; n(b,SID) ; b, pk(NAME)) | q(b,1,SID) n(b,SID) v(b,0,SID) MSET ]
     if SEQ |> v(b,0,SID)
-    /\ dec(v(b,0,SID), sk(b)) = (NONCE ; NAME) [nonexec] .
+    /\ dec(v(b,0,SID), sk(b)) = (NONCE ; NAME) [nonexec narrowing] .
 
   crl [b2] :
     [ SEQ | q(b,1,SID) n(b,SID) MSET ] => [ SEQ && ok(SID) | q(b,2,SID) n(b,SID) v(b,1,SID) MSET ]
     if SEQ |> v(b,1,SID)
-    /\ dec(v(b,1,SID), sk(b)) = n(b,SID) [nonexec] .
+    /\ dec(v(b,1,SID), sk(b)) = n(b,SID) [nonexec narrowing] .
 
-***(
-  authenticated state for session 0: [ SEQ_N && ok(0) | MSET ] s.t. CONDITIONS
-  secrecy of nonce n(a,SID): CONDITIONS => not (SEQ_N |> n(a,SID))
-    where CONDITIONS
-      iff forall (NAME, SID),  n(NAME, SID) : Nonce
-       /\ SEQ_1 |> v(...) /\ SEQ_2 |> v(...) /\ ... /\ SEQ_N |> v(...)
-
-reasoning rules:
-  rl [transitivity] :
-       [ _:MsgList | (SEQ |> MSG) (SEQ && MSG |> MSG') MSET ] 
-    => [ _:MsgList | (SEQ |> MSG) (SEQ && MSG |> MSG') (SEQ |> MSG') MSET ] .
-
-query:
-  init =>* [ SEQ | (SEQ_N |> n(a,0)) MSET ]
-
-***)
+  ops init1 init2 : -> State .
+  eq init1 = [ nil | q(a,0,0) q(b,0,0) ] .
+  eq init2 = [ nil | q(a,0,0) q(b,0,0) q(a,0,1) q(b,0,1) ] .
 endm
 
+vu-narrow [1,5] in NSL : init1 =>* [ SEQ:MsgList && ok(0) | MSET:CState ] .

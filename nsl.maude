@@ -1,0 +1,110 @@
+***(
+mod EXAMPLE is
+  op q : Name  Nat --- control state: q(principal, qid, session_id)
+  op v : Name Nat Nat -> Var . --- variable: v(principal, var_id, session_id)
+
+A --> B : 
+
+  crl [l0] :
+    [ SEQ | q(a,0,SID) MSET ] => [ SEQ @ f(v(a,0,SID)) | q(a,1,SID) v(a,0,SID) MSET ]
+    if SEQ |> v(a,0,SID) .
+
+  crl [l1] :
+    [ SEQ | q(a,1,SID) v(a,0,SID) MSET ] => [ SEQ @ v(a,0,SID) ; v(a,1,SID) | q(a,2,SID) v(a,0,SID) v(a,1,SID) MSET ]
+    if SEQ |> v(a,1,SID) /\ v(a,0,SID) = v(a,1,SID) .
+endm
+***)
+
+mod NSL is
+  protecting NAT .
+
+  sorts Name Var Nonce Key Msg Status MsgList CState State .
+  subsorts Var Nonce Key Name < Msg .
+
+  --- MsgList (sequence, or a "frame", of output messages, in the sense of CCSA)
+  subsort Msg < MsgList .
+  op nil : -> MsgList .
+  op _&&_ : MsgList MsgList -> MsgList [ctor assoc id: nil] .
+
+  --- CState (multiset of "facts", in the sense of Tamarin)
+  subsorts Msg Status < CState .
+  op __ : CState CState -> CState [ctor comm assoc] .
+
+  --- State (pair of a frame and facts)
+  op [_|_] : MsgList CState -> State [ctor] .
+
+  --- Derivability
+  op _|>_ : MsgList Msg -> Bool .
+
+  op q : Name Nat Nat -> Status [ctor] . --- control state: q(principal, qid, session_id)
+  op v : Name Nat Nat -> Var [ctor] . --- variable: v(principal, var_id, session_id)
+  op n : Name Nat -> Nonce [ctor] . --- nonce: n(principal, session_id)
+
+  ops pk sk : Name -> Key .
+  ops enc dec : Msg Key -> Msg .
+  op _;_ : Msg Msg -> Msg [ctor assoc] . --- concat
+
+  var MSG : Msg . var NAME : Name .
+  eq dec(enc(MSG, pk(NAME)), sk(NAME)) = MSG .
+  eq enc(dec(MSG, sk(NAME)), pk(NAME)) = MSG .
+
+  
+  op ok : Nat -> Msg .
+  ops a, b : -> Name [ctor] .
+  op b' : -> Name .
+  op init : -> State .
+  eq init = [ nil | q(a,0,0) q(b,0,0) q(a,0,1) q(b,0,1) ] .
+
+***(
+description of the intended(honest) run:
+   [a1] A --> B: enc(n_a ; a, pk(b))
+   [b1] B --> A: enc(n_a ; n_b ; b, pk(a))
+   [a2] A --> B: enc(n_b, pk(b))
+   [b2] B --> A: ok(a,b)
+setting:
+  protocol a "believes" b' = b
+  protocol b does not know a "a priori" (only knows identity of a via input NAME)
+***)
+
+  var SEQ : MsgList .
+  var MSET : CState .
+  var SID : Nat .
+  var NONCE : Nonce .
+
+
+  rl [a1] :
+    [ SEQ | q(a,0,SID) MSET ] => [ SEQ && enc(n(a,SID) ; a, pk(b')) | q(a,1,SID) n(a,SID) MSET ] [nonexec] .
+
+  crl [a2] :
+    [ SEQ | q(a,1,SID) n(a,SID) MSET ] => [ SEQ && enc(NONCE, pk(b')) | q(a,2,SID) n(a,SID) v(a,0,SID) MSET ]
+    if SEQ |> v(a,0,SID)
+    /\ dec(v(a,0,SID), sk(a)) = (n(a,SID) ; NONCE ; b') [nonexec] .
+
+  crl [b1] :
+    [ SEQ | q(b,0,SID) MSET ] => [ SEQ && enc(NONCE ; n(b,SID) ; b, pk(NAME)) | q(b,1,SID) n(b,SID) v(b,0,SID) MSET ]
+    if SEQ |> v(b,0,SID)
+    /\ dec(v(b,0,SID), sk(b)) = (NONCE ; NAME) [nonexec] .
+
+  crl [b2] :
+    [ SEQ | q(b,1,SID) n(b,SID) MSET ] => [ SEQ && ok(SID) | q(b,2,SID) n(b,SID) v(b,1,SID) MSET ]
+    if SEQ |> v(b,1,SID)
+    /\ dec(v(b,1,SID), sk(b)) = n(b,SID) [nonexec] .
+
+***(
+  authenticated state for session 0: [ SEQ_N && ok(0) | MSET ] s.t. CONDITIONS
+  secrecy of nonce n(a,SID): CONDITIONS => not (SEQ_N |> n(a,SID))
+    where CONDITIONS
+      iff forall (NAME, SID),  n(NAME, SID) : Nonce
+       /\ SEQ_1 |> v(...) /\ SEQ_2 |> v(...) /\ ... /\ SEQ_N |> v(...)
+
+reasoning rules:
+  rl [transitivity] :
+       [ _:MsgList | (SEQ |> MSG) (SEQ && MSG |> MSG') MSET ] 
+    => [ _:MsgList | (SEQ |> MSG) (SEQ && MSG |> MSG') (SEQ |> MSG') MSET ] .
+
+query:
+  init =>* [ SEQ | (SEQ_N |> n(a,0)) MSET ]
+
+***)
+endm
+

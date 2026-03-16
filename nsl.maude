@@ -1,79 +1,150 @@
-mod NSL is
-  protecting NAT .
-
-  sorts Name Var Nonce Key Msg Status MsgList CState State .
+fmod CCSA is
+  sorts Name Var Nonce Key Msg Status MsgList CState State Pred Formula .
   subsorts Var Nonce Key Name < Msg .
 
   --- MsgList (sequence, or a "frame", of output messages, in the sense of CCSA)
   subsort Msg < MsgList .
   op nil : -> MsgList .
-  op _&&_ : MsgList MsgList -> MsgList [ctor assoc id: nil] .
+  op _::_ : MsgList MsgList -> MsgList [ctor assoc id: nil] .
 
   --- CState (multiset of "facts", in the sense of Tamarin)
   subsorts Msg Status < CState .
   op __ : CState CState -> CState [ctor comm assoc] .
 
-  --- State (pair of a frame and facts)
+  --- State (= MsgList x CState)
   op [_|_] : MsgList CState -> State [ctor] .
 
-  --- Derivability
-  op _|>_ : MsgList Msg -> Bool .
+  --- Predicates
+  subsort Pred < Formula .
+  op _|>_ : MsgList Msg -> Pred [ctor] . --- Derivability
+  op _eq_ : Msg Msg -> Pred [ctor] . --- Equality
 
-  op q : Name Nat Nat -> Status [ctor] . --- control state: q(principal, qid, session_id)
-  op v : Name Nat Nat -> Var [ctor] . --- variable: v(principal, var_id, session_id)
-  op n : Name Nat -> Nonce [ctor] . --- nonce: n(principal, session_id)
+  --- Formulae
+  op _&&_ : Formula Formula -> Formula [ctor comm assoc id: tt] . --- conjunction
+  op tt : -> Formula [ctor] . --- true
+
+endfm
+
+
+fmod NSL-syntax is
+  protecting CCSA .
+  protecting NAT .
 
   ops pk sk : Name -> Key .
-  ops enc dec : Msg Key -> Msg .
+  op enc : Msg Nonce Key -> Msg .
+  op dec : Msg Key -> Msg .
   op _;_ : Msg Msg -> Msg [ctor assoc] . --- concat
 
-  var MSG : Msg . var NAME : Name .
-  eq dec(enc(MSG, pk(NAME)), sk(NAME)) = MSG .
-  eq enc(dec(MSG, sk(NAME)), pk(NAME)) = MSG .
+  var MSG : Msg . var NAME : Name . var R : Nonce .
+  eq dec(enc(MSG, R, pk(NAME)), sk(NAME)) = MSG .
 
-  
+  --- control state symbols
+  ops q-a0 q-a1 q-a2 q-b0 q-b1 q-b2 : Nat -> Status [ctor] . --- control status for honest agents
+  ops v-a1 v-b1 v-b2 : Nat -> Var [ctor] . --- attacker input variable
+  ops n-a n-b r1 r2 r3 : Nat -> Nonce [ctor] . --- honestly generated nonces
+ 
   op ok : Nat -> Msg .
-  ops a, b : -> Name [ctor] .
+
+  --- agent Names
+  ops a b : -> Name [ctor] .
   op b' : -> Name .
+endfm
+
 
 ***(
 description of the intended(honest) run:
-   [a1] A --> B: enc(n_a ; a, pk(b))
-   [b1] B --> A: enc(n_a ; n_b ; b, pk(a))
-   [a2] A --> B: enc(n_b, pk(b))
+   [a1] A --> B: enc(n-a ; a, r1, pk(b))
+   [b1] B --> A: enc(n-a ; n-b ; b, r2, pk(a))
+   [a2] A --> B: enc(n-b, r3, pk(b))
    [b2] B --> A: ok(a,b)
 setting:
   protocol a "believes" b' = b
   protocol b does not know a "a priori" (only knows identity of a via input NAME)
 ***)
+***(
+mod NSL is
+  protecting NSL-syntax .
 
-  var SEQ : MsgList .
-  var MSET : CState .
+  var SEQ : MsgList . var MSET : CState .
   var SID : Nat .
-  var NONCE : Nonce .
-
+  var NAME : Name . var NONCE : Nonce .
 
   rl [a1] :
-    [ SEQ | q(a,0,SID) MSET ] => [ SEQ && enc(n(a,SID) ; a, pk(b')) | q(a,1,SID) n(a,SID) MSET ] [nonexec narrowing] .
+    [ SEQ | q-a0(SID) MSET ] => [ SEQ :: enc((n-a(SID) ; a), r1(SID), pk(b')) | q-a1(SID) n-a(SID) r1(SID) MSET ] [nonexec] .
 
   crl [a2] :
-    [ SEQ | q(a,1,SID) n(a,SID) MSET ] => [ SEQ && enc(NONCE, pk(b')) | q(a,2,SID) n(a,SID) v(a,0,SID) MSET ]
-    if SEQ |> v(a,0,SID)
-    /\ dec(v(a,0,SID), sk(a)) = (n(a,SID) ; NONCE ; b') [nonexec narrowing] .
+    [ SEQ | q-a1(SID) n-a(SID) MSET ] => [ SEQ :: enc(NONCE, r3(SID), pk(b')) | q-a2(SID) n-a(SID) r3(SID) v-a1(SID) MSET ]
+    if SEQ |> v-a1(SID)
+    /\ dec(v-a1(SID), sk(a)) = (n-a(SID) ; NONCE ; b') [nonexec] .
 
   crl [b1] :
-    [ SEQ | q(b,0,SID) MSET ] => [ SEQ && enc(NONCE ; n(b,SID) ; b, pk(NAME)) | q(b,1,SID) n(b,SID) v(b,0,SID) MSET ]
-    if SEQ |> v(b,0,SID)
-    /\ dec(v(b,0,SID), sk(b)) = (NONCE ; NAME) [nonexec narrowing] .
+    [ SEQ | q-b0(SID) MSET ] => [ SEQ :: enc((NONCE ; n-b(SID) ; b), r2(SID), pk(NAME)) | q-b1(SID) n-b(SID) r2(SID) v-b1(SID) MSET ]
+    if SEQ |> v-b1(SID)
+    /\ dec(v-b1(SID), sk(b)) = (NONCE ; NAME) [nonexec] .
 
   crl [b2] :
-    [ SEQ | q(b,1,SID) n(b,SID) MSET ] => [ SEQ && ok(SID) | q(b,2,SID) n(b,SID) v(b,1,SID) MSET ]
-    if SEQ |> v(b,1,SID)
-    /\ dec(v(b,1,SID), sk(b)) = n(b,SID) [nonexec narrowing] .
+    [ SEQ | q-b1(SID) n-b(SID) MSET ] => [ SEQ :: ok(SID) | q-b2(SID) n-b(SID) v-b2(SID) MSET ]
+    if SEQ |> v-b2(SID)
+    /\ dec(v-b2(SID), sk(b)) = n-b(SID) [nonexec] .
+endm
+***)
 
-  ops init1 init2 : -> State .
-  eq init1 = [ nil | q(a,0,0) q(b,0,0) ] .
-  eq init2 = [ nil | q(a,0,0) q(b,0,0) q(a,0,1) q(b,0,1) ] .
+
+mod NSL' is --- transformed version of NSL
+  protecting NSL-syntax .
+
+  sort GState .
+  op _where_ : State Formula -> GState [ctor] . --- State with guard conditions
+
+  var SEQ : MsgList . var MSET : CState .
+  var SID : Nat .
+  var NAME : Name . var NONCE : Nonce .
+  var COND : Formula .
+
+  op synch : Nat -> Formula . --- for synchronization purposes: eliminate this for full narrowing
+
+  rl [a1] :
+    [ SEQ | q-a0(SID) MSET ] where COND && synch(0)
+  => 
+    [ SEQ :: enc((n-a(SID) ; a), r1(SID), pk(b')) | q-a1(SID) n-a(SID) r1(SID) MSET ] where COND && synch(1) [nonexec narrowing] .
+
+  rl [a2] :
+    [ SEQ | q-a1(SID) n-a(SID) MSET ] where COND && synch(2)
+  => 
+    [ SEQ :: enc(NONCE, r3(SID), pk(b')) | q-a2(SID) n-a(SID) r3(SID) v-a1(SID) MSET ]
+  where (COND 
+    && (SEQ |> v-a1(SID))
+    && (dec(v-a1(SID), sk(a)) eq (n-a(SID) ; NONCE ; b'))
+    && synch(3)
+  ) [nonexec narrowing] .
+
+  rl [b1] :
+    [ SEQ | q-b0(SID) MSET ] where COND && synch(1)
+  => 
+    [ SEQ :: enc((NONCE ; n-b(SID) ; b), r2(SID), pk(NAME)) | q-b1(SID) n-b(SID) r2(SID) v-b1(SID) MSET ]
+  where (COND 
+    && (SEQ |> v-b1(SID))
+    && (dec(v-b1(SID), sk(b)) eq (NONCE ; NAME))
+    && synch(2)
+  ) [nonexec narrowing] .
+
+  rl [b2] :
+    [ SEQ | q-b1(SID) n-b(SID) MSET ] where COND && synch(3)
+  => 
+    [ SEQ :: ok(SID) | q-b2(SID) n-b(SID) v-b2(SID) MSET ]
+  where (COND 
+    && (SEQ |> v-b2(SID))
+    && (dec(v-b2(SID), sk(b)) eq n-b(SID))
+  ) [nonexec narrowing] .
 endm
 
-vu-narrow [1,5] in NSL : init1 =>* [ SEQ:MsgList && ok(0) | MSET:CState ] .
+
+mod TEST is
+  including NSL' .
+  ops init1 init2 : -> GState .
+  eq init1 = [ nil | q-a0(0) q-b0(0) ] where synch(0) .
+  eq init2 = [ nil | q-a0(0) q-b0(0) q-a0(1) q-b0(1) ] where tt .
+endm
+
+--- {path} vu-narrow [1, 5] in TEST : init1 =>* [SEQ:MsgList :: ok(0) | MSET:CState] where COND:Formula .
+--- show path states [state_id] .

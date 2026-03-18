@@ -39,15 +39,15 @@ fmod NSL-syntax is
   eq dec(enc(MSG, R, pk(NAME)), sk(NAME)) = MSG .
 
   --- control state symbols
-  ops q-a0 q-a1 q-a2 q-b0 q-b1 q-b2 : Nat -> Status [ctor] . --- control status for honest agents
-  ops v-a1 v-b1 v-b2 : Nat -> Var [ctor] . --- attacker input variable
+  ops q-a0 q-a1 q-a2 : Name Nat -> Status [ctor] .
+  ops q-b0 q-b1 q-b2 : Nat -> Status [ctor] .
+  ---ops v-a1 v-b1 v-b2 : Nat -> Var [ctor] . --- attacker input variable
   ops n-a n-b r1 r2 r3 : Nat -> Nonce [ctor] . --- honestly generated nonces
  
   op ok : Nat -> Msg .
 
   --- agent Names
   ops a b : -> Name [ctor] .
-  op b' : -> Name .
 endfm
 
 
@@ -58,11 +58,12 @@ description of the intended(honest) run:
    [a2] A --> B: enc(n-b, r3, pk(b))
    [b2] B --> A: ok(a,b)
 setting:
-  protocol a "believes" b' = b
+  protocol a "believes" B = b
   protocol b does not know a "a priori" (only knows identity of a via input NAME)
 ***)
+
 ***(
-mod NSL is
+mod NSL-OLD is
   protecting NSL-syntax .
 
   var SEQ : MsgList . var MSET : CState .
@@ -70,12 +71,12 @@ mod NSL is
   var NAME : Name . var NONCE : Nonce .
 
   rl [a1] :
-    [ SEQ | q-a0(SID) MSET ] => [ SEQ :: enc((n-a(SID) ; a), r1(SID), pk(b')) | q-a1(SID) n-a(SID) r1(SID) MSET ] [nonexec] .
+    [ SEQ | q-a0(SID) MSET ] => [ SEQ :: enc((n-a(SID) ; a), r1(SID), pk(B)) | q-a1(SID) n-a(SID) r1(SID) MSET ] [nonexec] .
 
   crl [a2] :
-    [ SEQ | q-a1(SID) n-a(SID) MSET ] => [ SEQ :: enc(NONCE, r3(SID), pk(b')) | q-a2(SID) n-a(SID) r3(SID) v-a1(SID) MSET ]
+    [ SEQ | q-a1(SID) n-a(SID) MSET ] => [ SEQ :: enc(NONCE, r3(SID), pk(B)) | q-a2(SID) n-a(SID) r3(SID) v-a1(SID) MSET ]
     if SEQ |> v-a1(SID)
-    /\ dec(v-a1(SID), sk(a)) = (n-a(SID) ; NONCE ; b') [nonexec] .
+    /\ dec(v-a1(SID), sk(a)) = (n-a(SID) ; NONCE ; B) [nonexec] .
 
   crl [b1] :
     [ SEQ | q-b0(SID) MSET ] => [ SEQ :: enc((NONCE ; n-b(SID) ; b), r2(SID), pk(NAME)) | q-b1(SID) n-b(SID) r2(SID) v-b1(SID) MSET ]
@@ -87,10 +88,9 @@ mod NSL is
     if SEQ |> v-b2(SID)
     /\ dec(v-b2(SID), sk(b)) = n-b(SID) [nonexec] .
 endm
-***)
 
 
-mod NSL' is --- transformed version of NSL
+mod NSL'-OLD is --- transformed version of NSL
   protecting NSL-syntax .
 
   sort GState .
@@ -106,15 +106,15 @@ mod NSL' is --- transformed version of NSL
   rl [a1] :
     [ SEQ | q-a0(SID) MSET ] where COND && synch(0)
   => 
-    [ SEQ :: enc((n-a(SID) ; a), r1(SID), pk(b')) | q-a1(SID) n-a(SID) r1(SID) MSET ] where COND && synch(1) [nonexec narrowing] .
+    [ SEQ :: enc((n-a(SID) ; a), r1(SID), pk(B)) | q-a1(SID) n-a(SID) r1(SID) MSET ] where COND && synch(1) [nonexec narrowing] .
 
   rl [a2] :
     [ SEQ | q-a1(SID) n-a(SID) MSET ] where COND && synch(2)
   => 
-    [ SEQ :: enc(NONCE, r3(SID), pk(b')) | q-a2(SID) n-a(SID) r3(SID) v-a1(SID) MSET ]
+    [ SEQ :: enc(NONCE, r3(SID), pk(B)) | q-a2(SID) n-a(SID) r3(SID) v-a1(SID) MSET ]
   where (COND 
     && (SEQ |> v-a1(SID))
-    && (dec(v-a1(SID), sk(a)) eq (n-a(SID) ; NONCE ; b'))
+    && (dec(v-a1(SID), sk(a)) eq (n-a(SID) ; NONCE ; B))
     && synch(3)
   ) [nonexec narrowing] .
 
@@ -137,14 +137,88 @@ mod NSL' is --- transformed version of NSL
     && (dec(v-b2(SID), sk(b)) eq n-b(SID))
   ) [nonexec narrowing] .
 endm
+)***
+
+mod NSL is
+  protecting NSL-syntax .
+
+  var SEQ : MsgList . var MSET : CState .
+  var SID : Nat .
+  vars A B : Name . 
+  var NONCE : Nonce .
+
+  var MSG : Msg . --- the most important variable! (representing input message (possibly) sent by adversary, from past observable trace "SEQ")
+
+***(
+  rl [a1] :
+    [ SEQ | q-a0(B, SID) MSET ] => [ SEQ :: enc((n-a(SID) ; a), r1(SID), pk(B)) | q-a1(B, SID) n-a(SID) r1(SID) MSET ] [nonexec] .
+
+  crl [a2] :
+    [ SEQ | q-a1(B, SID) n-a(SID) MSET ] => [ SEQ :: enc(NONCE, r3(SID), pk(B)) | q-a2(B, SID) n-a(SID) r3(SID) MSET ]
+    if SEQ |> MSG
+    /\ dec(MSG, sk(a)) = (n-a(SID) ; NONCE ; B) [nonexec] .
+
+  crl [b1] :
+    [ SEQ | q-b0(SID) MSET ] => [ SEQ :: enc((NONCE ; n-b(SID) ; b), r2(SID), pk(A)) | q-b1(SID) n-b(SID) r2(SID) MSET ]
+    if SEQ |> MSG
+    /\ dec(MSG, sk(b)) = (NONCE ; A) [nonexec] .
+
+  crl [b2] :
+    [ SEQ | q-b1(SID) n-b(SID) MSET ] => [ SEQ :: ok(SID) | q-b2(SID) n-b(SID) MSET ]
+    if SEQ |> MSG
+    /\ dec(MSG, sk(b)) = n-b(SID) [nonexec] .
+***)
+
+  sort GState .
+  op _where_ : State Formula -> GState [ctor] . --- State with guard conditions
+
+  var COND : Formula .
+
+  rl [a1] :
+    [ SEQ | q-a0(B, SID) MSET ] where COND
+  => 
+    [ SEQ :: enc((n-a(SID) ; a), r1(SID), pk(B)) | q-a1(B, SID) n-a(SID) r1(SID) MSET ] where COND [nonexec narrowing] .
+
+  rl [a2] :
+    [ SEQ | q-a1(B, SID) n-a(SID) MSET ] where COND
+  => 
+    [ SEQ :: enc(NONCE, r3(SID), pk(B)) | q-a2(B, SID) n-a(SID) r3(SID) MSET ]
+  where (COND 
+    && (SEQ |> MSG)
+    && (dec(MSG, sk(a)) eq (n-a(SID) ; NONCE ; B))
+  ) [nonexec narrowing] .
+
+  rl [b1] :
+    [ SEQ | q-b0(SID) MSET ] where COND
+  => 
+    [ SEQ :: enc((NONCE ; n-b(SID) ; b), r2(SID), pk(A)) | q-b1(SID) n-b(SID) r2(SID) MSET ]
+  where (COND
+    && (SEQ |> MSG)
+    && (dec(MSG, sk(b)) eq (NONCE ; A))
+   ) [nonexec narrowing] .
+
+  rl [b2] :
+    [ SEQ | q-b1(SID) n-b(SID) MSET ] where COND
+  => 
+    [ SEQ :: ok(SID) | q-b2(SID) n-b(SID) MSET ]
+  where (COND
+    && (SEQ |> MSG)
+    && (dec(MSG, sk(b)) eq n-b(SID))
+  ) [nonexec narrowing] .
+
+endm
 
 
 mod TEST is
-  including NSL' .
-  ops init1 init2 : -> GState .
-  eq init1 = [ nil | q-a0(0) q-b0(0) ] where synch(0) .
-  eq init2 = [ nil | q-a0(0) q-b0(0) q-a0(1) q-b0(1) ] where tt .
+  including NSL .
+  ops init init1 init2 : -> GState .
+  ---eq init1 = [ nil | q-a0(0) q-b0(0) ] where synch(0) .
+  ---eq init2 = [ nil | q-a0(0) q-b0(0) q-a0(1) q-b0(1) ] where tt .
+  eq init = [ nil | q-a0(b,0) q-b0(0) q-b0(1) ] where tt .
 endm
 
 --- {path} vu-narrow [1, 5] in TEST : init1 =>* [SEQ:MsgList :: ok(0) | MSET:CState] where COND:Formula .
 --- show path states [state_id] .
+--- a trace with computational attack, from BAS12
+{path} vu-narrow [1] init =>* [ enc(M1:Msg,r1(0),M1':Msg) :: enc(M2:Msg,r2(0),M2':Msg) :: enc(M3:Msg,r3(0),M3':Msg) :: enc(M4:Msg,r2(1),M4':Msg) | MSET:CState ] where COND:Formula .
+---                                A --> B                      B --> A                      A -->    (E      -->  )      B --> E

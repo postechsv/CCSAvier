@@ -1,0 +1,54 @@
+{path} vu-narrow [1] in TEST : init =>* [enc(M1:Msg, r1(0), M1':Msg) :: enc(M2:Msg, r2(0), M2':Msg) :: enc(M3:Msg, r3(0), M3':Msg) :: enc(M4:Msg, r2(1), M4':Msg) |
+    MSET:CState] where COND:Formula .
+
+Solution 1 (state 48)
+rewrites: 49 in 28ms cpu (30ms real) (1750 rewrites/second)
+state: [enc(n-a(0) ; a, r1(0), pk(b)) :: enc(%1:Nonce ; n-b(0) ; b, r2(0), pk(%2:Name)) :: enc(%3:Nonce, r3(0), pk(b)) :: enc(%6:Nonce ; n-b(1) ; b, r2(1), pk(
+    %7:Name)) | q-b1(0) q-b1(1) n-a(0) n-b(0) n-b(1) r1(0) r2(0) r2(1) r3(0) q-a2(b, 0)] where ((enc(n-a(0) ; a, r1(0), pk(b)) :: enc(%1:Nonce ; n-b(0) ; b, r2(0),
+    pk(%2:Name))) |> %4:Msg) && ((enc(n-a(0) ; a, r1(0), pk(b)) :: enc(%1:Nonce ; n-b(0) ; b, r2(0), pk(%2:Name)) :: enc(%3:Nonce, r3(0), pk(b))) |> %8:Msg) && (enc(
+    n-a(0) ; a, r1(0), pk(b)) |> %5:Msg) && (dec(%4:Msg, sk(a)) eq n-a(0) ; %3:Nonce ; b) && (dec(%5:Msg, sk(b)) eq %1:Nonce ; %2:Name) && dec(%8:Msg, sk(b)) eq
+    %6:Nonce ; %7:Name
+accumulated substitution:
+variant unifier:
+M1:Msg --> n-a(0) ; a
+M1':Msg --> pk(b)
+M2:Msg --> @1:Nonce ; n-b(0) ; b
+M2':Msg --> pk(@2:Name)
+M3:Msg --> @3:Nonce
+M3':Msg --> pk(b)
+M4:Msg --> @4:Nonce ; n-b(1) ; b
+M4':Msg --> pk(@5:Name)
+MSET:CState --> q-b1(0) q-b1(1) n-a(0) n-b(0) n-b(1) r1(0) r2(0) r2(1) r3(0) q-a2(b, 0)
+COND:Formula --> ((enc(n-a(0) ; a, r1(0), pk(b)) :: enc(@1:Nonce ; n-b(0) ; b, r2(0), pk(@2:Name))) |> @6:Msg) && ((enc(n-a(0) ; a, r1(0), pk(b)) :: enc(@1:Nonce ;
+    n-b(0) ; b, r2(0), pk(@2:Name)) :: enc(@3:Nonce, r3(0), pk(b))) |> @7:Msg) && (enc(n-a(0) ; a, r1(0), pk(b)) |> @8:Msg) && (dec(@6:Msg, sk(a)) eq n-a(0) ;
+    @3:Nonce ; b) && (dec(@7:Msg, sk(b)) eq @4:Nonce ; @5:Name) && dec(@8:Msg, sk(b)) eq @1:Nonce ; @2:Name
+%1:Nonce --> @1:Nonce
+%2:Name --> @2:Name
+%3:Nonce --> @3:Nonce
+%6:Nonce --> @4:Nonce
+%7:Name --> @5:Name
+%4:Msg --> @6:Msg
+%8:Msg --> @7:Msg
+%5:Msg --> @8:Msg
+Maude> show path states 48 .
+state 0, GState: [nil | q-b0(0) q-b0(1) q-a0(b, 0)] where tt
+accumulated substitution:
+--- a1 --->
+state 1, GState: [enc(n-a(0) ; a, r1(0), pk(b)) | q-b0(0) q-b0(1) n-a(0) r1(0) q-a1(b, 0)] where tt
+accumulated substitution:
+--- b1 --->
+state 6, GState: [enc(n-a(0) ; a, r1(0), pk(b)) :: enc(%1:Nonce ; n-b(0) ; b, r2(0), pk(%2:Name)) | q-b0(1) q-b1(0) n-a(0) n-b(0) r1(0) r2(0) q-a1(b, 0)] where (enc(
+    n-a(0) ; a, r1(0), pk(b)) |> %3:Msg) && dec(%3:Msg, sk(b)) eq %1:Nonce ; %2:Name
+accumulated substitution:
+--- a2 --->
+state 18, GState: [enc(n-a(0) ; a, r1(0), pk(b)) :: enc(@1:Nonce ; n-b(0) ; b, r2(0), pk(@2:Name)) :: enc(@4:Nonce, r3(0), pk(b)) | q-b0(1) q-b1(0) n-a(0) n-b(0) r1(
+    0) r2(0) r3(0) q-a2(b, 0)] where ((enc(n-a(0) ; a, r1(0), pk(b)) :: enc(@1:Nonce ; n-b(0) ; b, r2(0), pk(@2:Name))) |> @5:Msg) && (enc(n-a(0) ; a, r1(0), pk(b))
+    |> @3:Msg) && (dec(@3:Msg, sk(b)) eq @1:Nonce ; @2:Name) && dec(@5:Msg, sk(a)) eq n-a(0) ; @4:Nonce ; b
+accumulated substitution:
+--- b1 --->
+state 48, GState: [enc(n-a(0) ; a, r1(0), pk(b)) :: enc(%1:Nonce ; n-b(0) ; b, r2(0), pk(%2:Name)) :: enc(%3:Nonce, r3(0), pk(b)) :: enc(%6:Nonce ; n-b(1) ; b, r2(1),
+    pk(%7:Name)) | q-b1(0) q-b1(1) n-a(0) n-b(0) n-b(1) r1(0) r2(0) r2(1) r3(0) q-a2(b, 0)] where ((enc(n-a(0) ; a, r1(0), pk(b)) :: enc(%1:Nonce ; n-b(0) ; b, r2(0),
+    pk(%2:Name))) |> %4:Msg) && ((enc(n-a(0) ; a, r1(0), pk(b)) :: enc(%1:Nonce ; n-b(0) ; b, r2(0), pk(%2:Name)) :: enc(%3:Nonce, r3(0), pk(b))) |> %8:Msg) && (enc(
+    n-a(0) ; a, r1(0), pk(b)) |> %5:Msg) && (dec(%4:Msg, sk(a)) eq n-a(0) ; %3:Nonce ; b) && (dec(%5:Msg, sk(b)) eq %1:Nonce ; %2:Name) && dec(%8:Msg, sk(b)) eq
+    %6:Nonce ; %7:Name
+accumulated substitution:

@@ -52,3 +52,19 @@ state 48, GState: [enc(n-a(0) ; a, r1(0), pk(b)) :: enc(%1:Nonce ; n-b(0) ; b, r
     n-a(0) ; a, r1(0), pk(b)) |> %5:Msg) && (dec(%4:Msg, sk(a)) eq n-a(0) ; %3:Nonce ; b) && (dec(%5:Msg, sk(b)) eq %1:Nonce ; %2:Name) && dec(%8:Msg, sk(b)) eq
     %6:Nonce ; %7:Name
 accumulated substitution:
+
+=== (pretty print for state 48) ===
+[
+   enc(n-a(0) ; a, r1(0), pk(b)) 
+:: enc(%1:Nonce ; n-b(0) ; b, r2(0), pk(%2:Name)) 
+:: enc(%3:Nonce, r3(0), pk(b)) 
+:: enc(%6:Nonce ; n-b(1) ; b, r2(1), pk(%7:Name)) 
+| q-b1(0) q-b1(1) n-a(0) n-b(0) n-b(1) r1(0) r2(0) r2(1) r3(0) q-a2(b, 0)
+] 
+where 
+&& (enc(n-a(0) ; a, r1(0), pk(b)) |> %5:Msg) 
+&& (dec(%5:Msg, sk(b)) eq %1:Nonce ; %2:Name) 
+&& ((enc(n-a(0) ; a, r1(0), pk(b)) :: enc(%1:Nonce ; n-b(0) ; b, r2(0), pk(%2:Name))) |> %4:Msg) 
+&& (dec(%4:Msg, sk(a)) eq n-a(0) ; %3:Nonce ; b) 
+&& ((enc(n-a(0) ; a, r1(0), pk(b)) :: enc(%1:Nonce ; n-b(0) ; b, r2(0), pk(%2:Name)) :: enc(%3:Nonce, r3(0), pk(b))) |> %8:Msg) 
+&& dec(%8:Msg, sk(b)) eq %6:Nonce ; %7:Name

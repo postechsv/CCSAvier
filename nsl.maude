@@ -75,52 +75,57 @@ setting:
 mod NSL is
   protecting NSL-syntax .
 
-  var SEQ : MsgList . var MSET : CState .
+  vars SEQ ASEQ : MsgList . 
+  var MSET : CState .
   var SID : Nat .
   vars A B : Name . 
   var NONCE : Nonce .
 
-  var MSG : Msg . --- the most important variable! (representing input message (possibly) sent by adversary, from past observable trace "SEQ")
+  var COND : Formula .
+
+  vars MSG MSG' : Msg . --- the most important variable! (representing input message (possibly) sent by adversary, from past observable trace "SEQ")
+  op att : MsgList -> CState [ctor] .
 
   sort GState .
   op _where_ : State Formula -> GState [ctor] . --- State with guard conditions
 
-  var COND : Formula .
-
-  --- intention (step 1):  none  ==(a)==>  < n-a, a >
+  --- intention (step 1):  MSG = none  ==(a)==>  < n-a, a >
   rl [a1] :
-    [ SEQ | q-a0(B, SID) MSET ] where COND
+    [ SEQ | q-a0(B, SID) att(ASEQ) MSET ] where COND
   => 
-    [ SEQ :: enc(< n-a(SID) , a >, r1(SID), pk(B)) | q-a1(B, SID) n-a(SID) r1(SID) MSET ] where COND [nonexec narrowing] .
+    [ SEQ :: enc(< n-a(SID) , a >, r1(SID), pk(B)) | q-a1(B, SID) n-a(SID) r1(SID) att(ASEQ :: MSG) MSET ] 
+  where (COND
+    && (SEQ :: enc(< n-a(SID) , a >, r1(SID), pk(B)) |> MSG)
+  ) [nonexec narrowing] .
 
-  --- intention (step 3): < n-a, < n-b, b > >  ==(a)==>  n-b
+  --- intention (step 3): MSG = < n-a, < n-b, b > >  ==(a)==>  n-b
   rl [a2] :
-    [ SEQ | q-a1(B, SID) n-a(SID) MSET ] where COND
+    [ SEQ | q-a1(B, SID) n-a(SID) att(ASEQ :: MSG) MSET ] where COND
   => 
-    [ SEQ :: enc(pi1(pi2(dec(MSG, sk(a)))), r3(SID), pk(B)) | q-a2(B, SID) n-a(SID) r3(SID) MSET ]
+    [ SEQ :: enc(pi1(pi2(dec(MSG, sk(a)))), r3(SID), pk(B)) | q-a2(B, SID) n-a(SID) r3(SID) att(ASEQ :: MSG :: MSG') MSET ]
   where (COND 
-    && (SEQ |> MSG)
+    && (SEQ :: enc(pi1(pi2(dec(MSG, sk(a)))), r3(SID), pk(B)) |> MSG')
     && (pi1(dec(MSG, sk(a))) eq n-a(SID))
     && (pi2(pi2(dec(MSG, sk(a)))) eq B)
   ) [nonexec narrowing] .
 
-  --- intention (step 2): < n-a, a >  ==(b)==>  < n-a, < n-b, b > >
+  --- intention (step 2): MSG = < n-a, a >  ==(b)==>  < n-a, < n-b, b > >
   rl [b1] :
-    [ SEQ | q-b0(SID) MSET ] where COND
+    [ SEQ | q-b0(SID) att(ASEQ :: MSG) MSET ] where COND
   => 
-    [ SEQ :: enc(< pi1(dec(MSG, sk(b))) , < n-b(SID) , b > >, r2(SID), pk(pi2(dec(MSG, sk(b))))) | q-b1(SID) n-b(SID) r2(SID) MSET ]
+    [ SEQ :: enc(< pi1(dec(MSG, sk(b))) , < n-b(SID) , b > >, r2(SID), pk(pi2(dec(MSG, sk(b))))) | q-b1(SID) n-b(SID) r2(SID) att(ASEQ :: MSG :: MSG') MSET ]
   where (COND
-    && (SEQ |> MSG)
+    && (SEQ :: enc(< pi1(dec(MSG, sk(b))) , < n-b(SID) , b > >, r2(SID), pk(pi2(dec(MSG, sk(b))))) |> MSG')
     && W(pi2(dec(MSG, sk(b))))
    ) [nonexec narrowing] .
 
-  --- intention (step 4): n-b  ==(a)==>  ok
+  --- intention (step 4): MSG = n-b  ==(a)==>  ok
   rl [b2] :
-    [ SEQ | q-b1(SID) n-b(SID) MSET ] where COND
+    [ SEQ | q-b1(SID) n-b(SID) att(ASEQ :: MSG) MSET ] where COND
   => 
-    [ SEQ :: ok(SID) | q-b2(SID) n-b(SID) MSET ]
+    [ SEQ :: ok(SID) | q-b2(SID) n-b(SID) att(ASEQ :: MSG :: MSG') MSET ]
   where (COND
-    && (SEQ |> MSG)
+    && (SEQ :: ok(SID) |> MSG')
     && (dec(MSG, sk(b)) eq n-b(SID))
   ) [nonexec narrowing] .
 endm
@@ -131,8 +136,8 @@ mod TEST is
   
   ops init-a1-b1 init-a1-b2 : -> GState .
 
-  eq init-a1-b1 = [ nil | q-a0(b,0) q-b0(0) ] where tt .
-  eq init-a1-b2 = [ nil | q-a0(b,0) q-b0(0) q-b0(1) ] where tt .
+  eq init-a1-b1 = [ nil | att(nil) q-a0(b,0) q-b0(0) ] where tt .
+  eq init-a1-b2 = [ nil | att(nil) q-a0(b,0) q-b0(0) q-b0(1) ] where tt .
 endm
 
 --- {path} vu-narrow [1, 5] in TEST : init1 =>* [SEQ:MsgList :: ok(0) | MSET:CState] where COND:Formula .
@@ -142,5 +147,9 @@ endm
 --- {path} vu-narrow [1] init-a1-b1 =>* [ enc(M1:Msg,r1(0),M1':Msg) :: enc(M2:Msg,r2(0),M2':Msg) :: enc(M3:Msg,r3(0),M3':Msg) :: ok(0) | MSET:CState ] where COND:Formula .
 
 --- a trace with computational attack, from BAS12
-{path} vu-narrow [1] init-a1-b2 =>* [ enc(M1:Msg,r1(0),M1':Msg) :: enc(M2:Msg,r2(0),M2':Msg) :: enc(M3:Msg,r3(0),M3':Msg) :: enc(M4:Msg,r2(1),M4':Msg) | MSET:CState ] where COND:Formula .
+--- {path} vu-narrow [1] init-a1-b2 =>* [ enc(M1:Msg,r1(0),M1':Msg) :: enc(M2:Msg,r2(0),M2':Msg) :: enc(M3:Msg,r3(0),M3':Msg) :: enc(M4:Msg,r2(1),M4':Msg) | MSET:CState ] where COND:Formula .
 ---                                          A --> B                      B --> A                      A -->    (E      -->  )      B --> E
+
+--- secrecy violation of n-b(0)
+--- {path} vu-narrow [1] init-a1-b2 =>* [ enc(M1:Msg,r1(0),M1':Msg) :: enc(M2:Msg,r2(0),M2':Msg) :: enc(M3:Msg,r3(0),M3':Msg) :: enc(M4:Msg,r2(1),M4':Msg) | att(ASEQ:MsgList :: n-b(0)) MSET:CState ] where COND:Formula .   
+---                                                                                                                                                                              here!

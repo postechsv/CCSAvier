@@ -50,13 +50,47 @@ process B(i: index) =
        if dec(x, sk(iB)) = nB(i)
        then out(c, ok).
 
-(*system (!_i A(i) | !_i B(i)). *)
+system (!_i A(i) | !_i B(i)).
 
+(* constructions for fixing the indended trace for computational attack *)
 abstract i0 : index
 abstract i1 : index.
 
-system (A(i0) | B(i0) | B(i1)).
+abstract nQ : message  (* nonce of the attacker *)
+abstract iQ : message. (* identifier of the attacker *)
 
+axiom step0 : pred(A1(i0)) = init
+axiom step1 : pred(B1(i0)) = A1(i0)
+axiom step2 : pred(A2(i0)) = B1(i0)
+axiom step3 : pred(B1(i1)) = A2(i0).
+
+axiom a1_to_b1 : input@B1(i0) = output@A1(i0)
+axiom b1_to_a2 : input@A2(i0) = output@B1(i0)
+axiom a2_to_b1 : input@B1(i1) = output@A2(i0).
+
+axiom trace : happens(B1(i1)).
+
+axiom ambiguity : nB(i0) = <nQ, iQ>. (* attack by Bana et al. *)
+
+lemma _ : happens(A2(i0)).
+Proof.
+  use trace. use step3.
+  auto.
+Qed.
+
+(* main theorem *)
 lemma leak :
   exists (t:timestamp), exists (i:index),
     happens(t) && att(frame@t) = nB(i).
+Proof.
+  exists B1(i1).
+  exists i0. 
+  split.
+  - use trace; auto.
+  - use trace.
+    use step0. use step1. use step2. use step3.
+    use a1_to_b1. use b1_to_a2. use a2_to_b1.
+
+
+  admit.
+Qed.

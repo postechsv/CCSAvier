@@ -81,15 +81,23 @@ Qed.
 
 (* TODO: check if above axioms were actually used for simpl *)
 lemma guess :
-  <fst(dec(output@B1(i1), sk(iQ))), iQ> = nB(i0).
+  <fst(dec(snd(snd(frame@B1(i1))), sk(iQ))), iQ> = nB(i0).
 Proof.
   use ambiguity. use trace.
   use step0. use step1. use step2. use step3.
   use a1_to_b1. use b1_to_a2. use a2_to_b1.
 
   rewrite Meq.  
-  have Eq_fst : fst (dec (output@B1(i1), sk iQ)) = nQ.
-    { expand output; simpl; auto. }
+
+  have exec_true: exec@B1(i1) = true.
+    { auto. }
+  have Eq_fst : fst(dec(snd(snd(frame@B1(i1))), sk iQ)) = nQ.
+    {
+      expand frame. simpl.
+      rewrite exec_true. simpl.
+      expand output. simpl.
+      auto.
+    }
   rewrite Eq_fst; auto.
 Qed.
 
@@ -98,15 +106,10 @@ lemma leak :
   exists(att:message->message), exists (t:timestamp), exists (i:index),
     happens(t) && att(frame@t) = nB(i).
 Proof.
-  exists
+  exists fun fr => <fst(dec(snd(snd(fr)), sk iQ)), iQ>.
   exists B1(i1).
   exists i0. 
   split.
   - use trace; auto.
-  - use trace.
-    use step0. use step1. use step2. use step3.
-    use a1_to_b1. use b1_to_a2. use a2_to_b1.
-
-
-  admit.
+  - use guess; auto.
 Qed.

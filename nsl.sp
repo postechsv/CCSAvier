@@ -45,7 +45,7 @@ process A(i: index) =
 
 process B(i: index) =
   B1 : in(c,x);
-       out(c, enc(<fst(dec(x,sk(iB))), <nB(i), iB>>, r2(i), pk(sk(iA))));
+       out(c, enc(<fst(dec(x,sk(iB))), <nB(i), iB>>, r2(i), pk(sk(snd(dec(x,sk(iB)))))));
   B2 : in(c,x);
        if dec(x, sk(iB)) = nB(i)
        then out(c, ok).
@@ -78,11 +78,27 @@ Proof.
   auto.
 Qed.
 
+
+(* TODO: check if above axioms were actually used for simpl *)
+lemma guess :
+  <fst(dec(output@B1(i1), sk(iQ))), iQ> = nB(i0).
+Proof.
+  use ambiguity. use trace.
+  use step0. use step1. use step2. use step3.
+  use a1_to_b1. use b1_to_a2. use a2_to_b1.
+
+  rewrite Meq.  
+  have Eq_fst : fst (dec (output@B1(i1), sk iQ)) = nQ.
+    { expand output; simpl; auto. }
+  rewrite Eq_fst; auto.
+Qed.
+
 (* main theorem *)
 lemma leak :
-  exists (t:timestamp), exists (i:index),
+  exists(att:message->message), exists (t:timestamp), exists (i:index),
     happens(t) && att(frame@t) = nB(i).
 Proof.
+  exists
   exists B1(i1).
   exists i0. 
   split.

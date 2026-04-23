@@ -1,0 +1,17 @@
+load nsl .
+
+mod TEST is
+  including NSL .
+  
+  ops init-a1-b1 init-a1-b2 : -> GState .
+
+  eq init-a1-b1 = [ nil | att(nil) q-a0(b,0) q-b0(0) ] where tt .
+  eq init-a1-b2 = [ nil | att(nil) q-a0(b,0) q-b0(0) q-b0(1) ] where tt .
+endm
+
+--- {path} vu-narrow [1, 5] in TEST : init1 =>* [SEQ:MsgList :: ok(0) | MSET:CState] where COND:Formula .
+--- show path states [state_id] 
+
+--- secrecy violation of n-b(0)
+{path} vu-narrow [1] init-a1-b2 =>* [ enc(M1:Msg,r1(0),M1':Msg) :: enc(M2:Msg,r2(0),M2':Msg) :: enc(M3:Msg,r3(0),M3':Msg) :: enc(M4:Msg,r2(1),M4':Msg) | att(ASEQ:MsgList :: n-b(0)) MSET:CState ] where COND:Formula .   
+---                                                                                                                                                                              here!

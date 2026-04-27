@@ -2,7 +2,7 @@ fmod CCSA is
   sorts Name Var Nonce Key Msg Status MsgList CState State Pred Formula .
   subsorts Var Nonce Key Name < Msg .
 
-  --- MsgList (sequence, or a "frame", of output messages, in the sense of CCSA)
+  --- MsgList (OUTPUTSuence, or a "frame", of output messages, in the sense of CCSA)
   subsort Msg < MsgList .
   op nil : -> MsgList .
   op _::_ : MsgList MsgList -> MsgList [ctor assoc id: nil] .
@@ -22,11 +22,18 @@ fmod CCSA is
   --- Predicates (uninterpreted)
   subsort Pred < Formula .
   op _|>_ : MsgList Msg -> Pred [ctor] . --- Derivability
-  op _eq_ : Msg Msg -> Pred [ctor] . --- Equality
+  op _equ_ : Msg Msg -> Pred [ctor] . --- Equality
 
   --- Formulae
-  op _&&_ : Formula Formula -> Formula [ctor comm assoc id: tt] . --- conjunction
+  op _&&_ : Formula Formula -> Formula [format (d nt d d) ctor comm assoc id: tt] . --- conjunction
   op tt : -> Formula [ctor] . --- true
+
+  --- Attacker
+  op att : MsgList -> CState [ctor] .
+  op freeze : -> Msg [ctor] . --- endmarker for attack patterns
+
+  sort GState .
+  op _where_ : State Formula -> GState [ctor format (d d nt d)] . --- State with guard conditions
 endfm
 
 
@@ -35,20 +42,18 @@ fmod NSL-syntax is
   protecting NAT .
 
   --- encryption scheme
-  ops pk sk : Msg -> Key . --- e.g., pk(pi2(dec(MSG, sk(b)))), assuming W(pi2(dec(MSG, sk(b))))
+  ops pk sk : Msg -> Key . --- e.g., pk(snd(dec(MSG, sk(b)))), assuming W(snd(dec(MSG, sk(b))))
   op enc : Msg Nonce Key -> Msg .
   op dec : Msg Key -> Msg .
   var MSG : Msg . var NAME : Name . var R : Nonce .
-  eq dec(enc(MSG, R, pk(NAME)), sk(NAME)) = MSG .
+  eq dec(enc(MSG, R, pk(NAME)), sk(NAME)) = MSG . ---[variant] .
 
   --- pairing
-  op _;_ : Msg Msg -> Msg [ctor assoc] . --- concat (old version)
-
   op <_,_> : Msg Msg -> Msg [ctor] . --- pairing
-  ops pi1 pi2 : Msg -> Msg . --- projection
+  ops fst snd : Msg -> Msg . --- projection
   var MSG1 MSG2 : Msg .
-  eq pi1(< MSG1 , MSG2 >) = MSG1 . 
-  eq pi2(< MSG1 , MSG2 >) = MSG2 .
+  eq fst(< MSG1 , MSG2 >) = MSG1 . ---[variant] . 
+  eq snd(< MSG1 , MSG2 >) = MSG2 . ---[variant] .
 
   --- control state symbols
   ops q-a0 q-a1 q-a2 : Name Nat -> Status [ctor] . --- control states for initiator
@@ -75,7 +80,7 @@ setting:
 mod NSL is
   protecting NSL-syntax .
 
-  vars SEQ ASEQ : MsgList . 
+  vars OUTPUTS INPUTS : MsgList . 
   var MSET : CState .
   var SID : Nat .
   vars A B : Name . 
@@ -83,50 +88,55 @@ mod NSL is
 
   var COND : Formula .
 
-  vars MSG MSG' : Msg . --- the most important variable! (representing input message (possibly) sent by adversary, from past observable trace "SEQ")
-  op att : MsgList -> CState [ctor] .
+  vars INPUT : Msg . --- protocol input (= attacker output)
 
-  sort GState .
-  op _where_ : State Formula -> GState [ctor] . --- State with guard conditions
+
+  rl [finalattack] :
+    [ OUTPUTS | att(INPUTS) MSET ] where COND
+  => 
+    [ OUTPUTS :: freeze | att(INPUTS :: INPUT) MSET ] 
+  where (COND
+    && (OUTPUTS |> INPUT)
+  ) [nonexec narrowing] .
 
   --- intention (step 1):  MSG = none  ==(a)==>  < n-a, a >
   rl [a1] :
-    [ SEQ | q-a0(B, SID) att(ASEQ) MSET ] where COND
+    [ OUTPUTS | q-a0(B, SID) att(INPUTS) MSET ] where COND
   => 
-    [ SEQ :: enc(< n-a(SID) , a >, r1(SID), pk(B)) | q-a1(B, SID) n-a(SID) r1(SID) att(ASEQ :: MSG) MSET ] 
+    [ OUTPUTS :: enc(< n-a(SID) , a >, r1(SID), pk(B)) | q-a1(B, SID) att(INPUTS :: INPUT) MSET ] 
   where (COND
-    && (SEQ :: enc(< n-a(SID) , a >, r1(SID), pk(B)) |> MSG)
+    && (OUTPUTS |> INPUT)
   ) [nonexec narrowing] .
 
   --- intention (step 3): MSG = < n-a, < n-b, b > >  ==(a)==>  n-b
   rl [a2] :
-    [ SEQ | q-a1(B, SID) n-a(SID) att(ASEQ :: MSG) MSET ] where COND
+    [ OUTPUTS | q-a1(B, SID) att(INPUTS) MSET ] where COND
   => 
-    [ SEQ :: enc(pi1(pi2(dec(MSG, sk(a)))), r3(SID), pk(B)) | q-a2(B, SID) n-a(SID) r3(SID) att(ASEQ :: MSG :: MSG') MSET ]
+    [ OUTPUTS :: enc(fst(snd(dec(INPUT, sk(a)))), r3(SID), pk(B)) | q-a2(B, SID) att(INPUTS :: INPUT) MSET ]
   where (COND 
-    && (SEQ :: enc(pi1(pi2(dec(MSG, sk(a)))), r3(SID), pk(B)) |> MSG')
-    && (pi1(dec(MSG, sk(a))) eq n-a(SID))
-    && (pi2(pi2(dec(MSG, sk(a)))) eq B)
+    && (OUTPUTS |> INPUT)
+    && (fst(dec(INPUT, sk(a))) equ n-a(SID))
+    && (snd(snd(dec(INPUT, sk(a)))) equ B)
   ) [nonexec narrowing] .
 
   --- intention (step 2): MSG = < n-a, a >  ==(b)==>  < n-a, < n-b, b > >
   rl [b1] :
-    [ SEQ | q-b0(SID) att(ASEQ :: MSG) MSET ] where COND
+    [ OUTPUTS | q-b0(SID) att(INPUTS) MSET ] where COND
   => 
-    [ SEQ :: enc(< pi1(dec(MSG, sk(b))) , < n-b(SID) , b > >, r2(SID), pk(pi2(dec(MSG, sk(b))))) | q-b1(SID) n-b(SID) r2(SID) att(ASEQ :: MSG :: MSG') MSET ]
+    [ OUTPUTS :: enc(< fst(dec(INPUT, sk(b))) , < n-b(SID) , b > >, r2(SID), pk(snd(dec(INPUT, sk(b))))) | q-b1(SID) att(INPUTS :: INPUT) MSET ]
   where (COND
-    && (SEQ :: enc(< pi1(dec(MSG, sk(b))) , < n-b(SID) , b > >, r2(SID), pk(pi2(dec(MSG, sk(b))))) |> MSG')
-    && W(pi2(dec(MSG, sk(b))))
+    && (OUTPUTS |> INPUT)
+    && W(snd(dec(INPUT, sk(b))))
    ) [nonexec narrowing] .
 
   --- intention (step 4): MSG = n-b  ==(a)==>  ok
   rl [b2] :
-    [ SEQ | q-b1(SID) n-b(SID) att(ASEQ :: MSG) MSET ] where COND
+    [ OUTPUTS | q-b1(SID) att(INPUTS) MSET ] where COND
   => 
-    [ SEQ :: ok(SID) | q-b2(SID) n-b(SID) att(ASEQ :: MSG :: MSG') MSET ]
+    [ OUTPUTS :: ok(SID) | q-b2(SID) att(INPUTS :: INPUT) MSET ]
   where (COND
-    && (SEQ :: ok(SID) |> MSG')
-    && (dec(MSG, sk(b)) eq n-b(SID))
+    && (OUTPUTS |> INPUT)
+    && (dec(INPUT, sk(b)) equ n-b(SID))
   ) [nonexec narrowing] .
 endm
 
